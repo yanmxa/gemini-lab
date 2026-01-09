@@ -1,0 +1,14 @@
+# System files
+.DS_Store
+
+# Temporary files and logs
+tmp/
+*.log
+
+# User-specific configuration and state
+installation_id
+state.json
+settings.json
+
+# Keep the template/original settings
+!settings.json.orig
