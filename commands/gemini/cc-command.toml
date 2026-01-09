@@ -1,46 +1,133 @@
-description = "Migrate Claude Code commands and plugins to Gemini CLI."
-# Tags: migration, system
+description = "Import a Claude Code command into Gemini CLI as a standalone all-in-one command."
 
 prompt = """
-You are about to run a migration script to import configuration from Claude Code (~/.claude) to Gemini (~/.gemini).
+You are an expert **Claude Code to Gemini CLI Command Migrator**. Your task is to find a Claude Code command, fully understand its logic (including any referenced scripts or skills), and create an equivalent self-contained Gemini CLI command.
 
-### Arguments:
-*   **target**: What to migrate: `commands`, `plugins`, or `all` (default).
-*   **--scope**: `global` (~/.gemini/) or `project` (./.gemini/). Default: `global`.
-*   **--strategy**:
-    *   `force`: Cleanup previously imported files and overwrite existing.
-    *   `override`: Overwrite existing files without cleanup.
-    *   `ignore`: Skip existing files.
-    *   `auto`: Skip existing files (default).
-    *   `delete`: Remove previously migrated files and exit.
+## Phase 1: Locate the Command
 
-### Migration Workflow:
-1.  **Parse Arguments**: Determine target, scope, and strategy.
-2.  **Delete Strategy**: If `--strategy delete` is used, the script runs the cleanup phase (removing imported files) and then exits.
-3.  **Phase 0: Cleanup** (if strategy is `force`):
-    *   Scans the destination directory (global or project).
-    *   Deletes all `.toml` files tagged with `# Tags: claude-code-import` to ensure a clean slate.
-4.  **Phase 1: Migration**:
-    *   **User Commands**: Recursively scans `~/.claude/commands`.
-    *   **Plugins**: Recursively scans `~/.claude/plugins/cache`, flattening the structure (e.g., `plugins/cache/.../git/commands` -> `commands/git`).
-4.  **File Generation**:
-    *   Converts source `.md` files to `.toml`.
-    *   **Global Scope**: Embeds the full content of the command for stability.
-    *   **Project Scope**: Creates a reference link (`@/path/to/original`) for dynamic updates.
+Run the lookup script to find the Claude Code command:
 
-# (AtSymbol){scripts/migrate_claude_integrated.py}
+```bash
+python3 ~/.gemini/scripts/cc_lookup.py "{{args}}"
+```
 
-### How to execute:
-Run the script above using Python 3, passing your desired arguments as `{{args}}`:
+The script searches in order:
+1. `./.claude/commands/` (project level)
+2. `~/.claude/commands/` (user level)
+3. Enabled plugins from `settings.json` -> `installed_plugins.json` cache
 
-**Example Calls:**
-*   **Default Migration**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py`
-*   **Force Re-import**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --strategy force`
-*   **Project-level Link**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --scope project`
-*   **Delete Migrated Files**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --strategy delete`
-*   **Migrate Only Plugins**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py plugins`
+The output is JSON with:
+- `found`: boolean
+- `path`: absolute path to the command file
+- `source`: where it was found (project, user, plugin:name)
+- `content`: raw markdown content
+- `parsed.frontmatter`: metadata (description, allowed-tools, argument-hint)
+- `parsed.body`: the main prompt/instructions
+- `referenced_scripts`: dict of script paths to their content
+- `referenced_skills`: list of skill references found
+- `available_commands`: (if not found) list of all available commands
 
-# INSTRUCTION:
-# Execute the script with the following command:
-# python3 ~/.gemini/scripts/migrate_claude_integrated.py {{args}}
+## Phase 2: Analyze & Transform
+
+### If the command was found:
+
+1. **Parse the structure**:
+   - Extract the description from frontmatter
+   - Extract the main prompt/instructions from body
+   - Note any argument hints for the command
+
+2. **Resolve all dependencies**:
+   - For referenced scripts: the script content is already included in `referenced_scripts`
+   - For skills referenced: note them but focus on the command itself
+
+3. **Plan the transformation**:
+   - Determine if the command can be a pure prompt command
+   - If it references bash scripts, decide whether to:
+     a) Inline the script logic into the prompt (preferred for simple scripts)
+     b) Create an embedded python/bash script block within the TOML
+   - Goal: Create a **single, self-contained `.toml` file**
+
+### If the command was NOT found:
+
+1. Show the user which locations were searched
+2. Present the list of available commands from `available_commands`
+3. Ask the user to:
+   - Choose from available commands, OR
+   - Provide a different name or path
+
+## Phase 3: Create the Gemini Command
+
+Once you understand the command, create the Gemini CLI equivalent.
+
+### Output Path Convention
+
+Convert the command name to a file path:
+- `jira:my-issues` -> `~/.gemini/commands/imported/jira/my-issues.toml`
+- `compact-commits` -> `~/.gemini/commands/imported/compact-commits.toml`
+
+### TOML Template
+
+```toml
+description = "[Brief description from original command]"
+
+prompt = \"\"\"
+[Transformed prompt that works with Gemini CLI]
+
+[If the original used bash scripts, either:]
+
+Option A - Inline the logic into natural language instructions:
+## Implementation Steps
+1. [Step derived from script logic]
+2. [Step derived from script logic]
+...
+
+Option B - Embed the script directly (for complex scripts):
+## Script
+Run the following script with the provided arguments:
+
+```bash
+#!/bin/bash
+[Script content here, with {{args}} for user input]
+```
+
+[Any additional instructions or output formatting requirements]
+\"\"\"
+```
+
+### Transformation Rules
+
+1. **Claude-specific references** -> Remove or adapt:
+   - `~/.claude/scripts/` paths -> inline the script or adapt
+   - Claude Code tool references -> map to Gemini equivalents
+
+2. **Variable substitution**:
+   - `$1`, `${1:-default}` -> `{{args}}` or specific variable syntax
+   - Keep argument hint context in the prompt
+
+3. **Output formatting**:
+   - Preserve the expected output format from the original
+   - Adapt emoji usage if appropriate
+
+4. **Tool permissions**:
+   - Claude's `allowed-tools: [Bash]` -> Gemini handles this automatically
+
+## Phase 4: Confirmation & Write
+
+1. **Present the draft** to the user:
+   - Show the proposed file path
+   - Show the complete TOML content
+   - Explain key transformations made
+
+2. **Ask for confirmation**:
+   - "Ready to create this command?"
+   - Allow user to request modifications
+
+3. **Create the file**:
+   - Ensure the directory exists: `mkdir -p ~/.gemini/commands/imported/[category]/`
+   - Write the file using the file writing tool
+   - Confirm success with the invocation command
+
+---
+
+**Action**: Start Phase 1 now. Execute the lookup script with "{{args}}" and proceed based on the result.
 """
