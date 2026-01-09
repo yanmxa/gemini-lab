@@ -1,54 +1,34 @@
-description = "Migrate Claude Code commands to Gemini CLI (with argument hints).
+description = "Migrate Claude Code commands and plugins to Gemini CLI."
+# Tags: migration, system
 
 prompt = """
-You are the **Claude Code to Gemini CLI Migration Assistant**.
-Your task is to create Gemini CLI command wrappers that reference existing Claude Code commands, ensuring usage hints are visible.
+You are about to run a migration script to import configuration from Claude Code (~/.claude) to Gemini (~/.gemini).
 
-### 1. Parse Arguments
-Analyze `{{args}}` for scope and strategy.
-*   **Target**: Defaults to `commands` and `CLAUDE.md`.
-*   **Scope**: `global` (-> `~/.gemini/`) or `project` (default, -> `./.gemini/`).
+### Arguments:
+*   **target**: What to migrate: `commands`, `plugins`, or `all` (default).
+*   **--scope**: `global` (~/.gemini/) or `project` (./.gemini/). Default: `global`.
+*   **--strategy**:
+    *   `force`: Cleanup previously imported files and overwrite existing.
+    *   `override`: Overwrite existing files without cleanup.
+    *   `ignore`: Skip existing files.
+    *   `auto`: Skip existing files (default).
 
-### 2. Migration Logic
+### Migration Workflow:
+1.  **Parse Arguments**: Determine target (`commands`, `plugins`, `all`), scope (`global`, `project`), and strategy.
+2.  **Phase 0: Cleanup** (if strategy is `force`):
+    *   Scans the destination directory (global or project).
+    *   Deletes all `.toml` files tagged with `# Tags: claude-code-import` to ensure a clean slate.
+3.  **Phase 1: Migration**:
+    *   **User Commands**: Recursively scans `~/.claude/commands`.
+    *   **Plugins**: Recursively scans `~/.claude/plugins/cache`, flattening the structure (e.g., `plugins/cache/.../git/commands` -> `commands/git`).
+4.  **File Generation**:
+    *   Converts source `.md` files to `.toml`.
+    *   **Global Scope**: Embeds the full content of the command for stability.
+    *   **Project Scope**: Creates a reference link (`@/path/to/original`) for dynamic updates.
 
-#### Task A: Migrate Context (CLAUDE.md -> GEMINI.md)
-*   Read `CLAUDE.md` (if exists).
-*   Append to `.gemini/GEMINI.md` with a header: `
-## Imported Context from CLAUDE.md
-`.
+# (AtSymbol){scripts/migrate_claude_integrated.py}
 
-#### Task B: Migrate Commands (Reference Mode)
-For each targeted Claude Code command file:
-
-1.  **Analyze Source**: Read the file to extract:
-    *   **Description**: The main purpose of the command.
-    *   **Argument Hints**: Scan the prompt text for placeholders (e.g., `{{url}}`, `{{branch}}`) or instruction text implying arguments.
-    *   **Env Vars**: Check for `CLAUDE_*` vars.
-
-2.  **Generate TOML Wrapper**:
-    Create a `.toml` file. **Crucially, enhance the description with argument hints.**
-
-    ```toml
-    # Append usage hint to description if arguments are detected
-    description = "<extracted_description> (Usage: <arg_hints>)"
-    # Tags: claude-code-import
-
-    prompt = """
-    # Source: Imported from Claude Code command: <original_file_path>
-    # <conditional_warning_if_claude_vars_detected>
-    # ⚠️ NOTE: This prompt uses Claude-specific variables. Please replace them with hardcoded paths or Gemini equivalents.
-    # </conditional_warning>
-
-    @{<absolute_path_to_original_file>}
-    """
-    ```
-
-3.  **Path Resolution**: Use absolute paths for `@{...}`.
-
-### 3. Execution
-*   Use `write_file` to save the `.toml` wrappers.
-*   Log the actions taken.
-
----
-**Action**: Start now. Analyze `{{args}}` and execute the migration.
-"
+# INSTRUCTION:
+# Run the script above with the provided arguments:
+# python3 ~/gemini/scripts/migrate_claude_integrated.py {{args}}
+"""
