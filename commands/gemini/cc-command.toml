@@ -12,13 +12,15 @@ You are about to run a migration script to import configuration from Claude Code
     *   `override`: Overwrite existing files without cleanup.
     *   `ignore`: Skip existing files.
     *   `auto`: Skip existing files (default).
+    *   `delete`: Remove previously migrated files and exit.
 
 ### Migration Workflow:
-1.  **Parse Arguments**: Determine target (`commands`, `plugins`, `all`), scope (`global`, `project`), and strategy.
-2.  **Phase 0: Cleanup** (if strategy is `force`):
+1.  **Parse Arguments**: Determine target, scope, and strategy.
+2.  **Delete Strategy**: If `--strategy delete` is used, the script runs the cleanup phase (removing imported files) and then exits.
+3.  **Phase 0: Cleanup** (if strategy is `force`):
     *   Scans the destination directory (global or project).
     *   Deletes all `.toml` files tagged with `# Tags: claude-code-import` to ensure a clean slate.
-3.  **Phase 1: Migration**:
+4.  **Phase 1: Migration**:
     *   **User Commands**: Recursively scans `~/.claude/commands`.
     *   **Plugins**: Recursively scans `~/.claude/plugins/cache`, flattening the structure (e.g., `plugins/cache/.../git/commands` -> `commands/git`).
 4.  **File Generation**:
@@ -28,7 +30,17 @@ You are about to run a migration script to import configuration from Claude Code
 
 # (AtSymbol){scripts/migrate_claude_integrated.py}
 
+### How to execute:
+Run the script above using Python 3, passing your desired arguments as `{{args}}`:
+
+**Example Calls:**
+*   **Default Migration**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py`
+*   **Force Re-import**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --strategy force`
+*   **Project-level Link**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --scope project`
+*   **Delete Migrated Files**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py --strategy delete`
+*   **Migrate Only Plugins**: `python3 ~/.gemini/scripts/migrate_claude_integrated.py plugins`
+
 # INSTRUCTION:
-# Run the script above with the provided arguments:
-# python3 ~/gemini/scripts/migrate_claude_integrated.py {{args}}
+# Execute the script with the following command:
+# python3 ~/.gemini/scripts/migrate_claude_integrated.py {{args}}
 """

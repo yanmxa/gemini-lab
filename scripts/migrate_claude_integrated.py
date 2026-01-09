@@ -106,7 +106,7 @@ def main():
                         help="What to migrate (default: all)")
     parser.add_argument("--scope", choices=["global", "project"], default="global", 
                         help="Migration scope (default: global)")
-    parser.add_argument("--strategy", choices=["force", "override", "ignore", "auto"], default="auto",
+    parser.add_argument("--strategy", choices=["force", "override", "ignore", "auto", "delete"], default="auto",
                         help="Migration strategy (default: auto)")
     
     args = parser.parse_args()
@@ -119,6 +119,13 @@ def main():
     
     target_commands = os.path.join(target_root, "commands")
     
+    # Handle 'delete' strategy: Clean up and exit
+    if args.strategy == "delete":
+        print(f"Target scope: {args.scope} ({target_root})")
+        print("Strategy: delete (Removing previously migrated files)")
+        cleanup_phase(target_commands)
+        return
+
     if not os.path.exists(source_root):
         print(f"Source {source_root} not found. Nothing to migrate.")
         return
